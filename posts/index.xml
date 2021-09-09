@@ -19,7 +19,7 @@
             <content type="html"><![CDATA[<h2 id="introduction">Introduction</h2>
 <p>In this post, I will show how to manually unpack a simple executable that has been packed with WinUPack.
 However, the goal of this post is to provide a general approach to start reversing code and, in general, packers.
-Because of that it will be hard to cover all the techniques and strategies that could be applied,
+Because of that it will be hard to cover all the techniques and strategies that could be applied, 
 but I will try to give the rights hints and the mindset to approach these challenges.</p>
 <p>I will also try to highlight references to concepts that are almost mandatory to understand when you start doing this activity.</p>
 <p>Before to proceed, all files and tools used in this tutorial are available at the following links:</p>
@@ -28,7 +28,7 @@ but I will try to give the rights hints and the mindset to approach these challe
 <li><a href="http://www.openrce.org/downloads/details/108/OllyDump">OllyDump</a></li>
 <li><a href="https://webscene.ir/tools/show/Import-REConstructor-1.6-FINAL">Import Rec</a></li>
 </ul>
-<p>I expect that most of the people that are approacing this post are already aware of packing techniques and how these are generally implemented.
+<p>I expect that most of the people that are approaching this post are already aware of packing techniques and how these are generally implemented.
 However, since I strongly dislike to take for granted even this little details, a good reference to dig deeper about this topic is:</p>
 <ul>
 <li><a href="https://techtalk.pcmatic.com/2017/10/04/debugging-unpacking-malicious-software/">Debugging and Unpacking malicious software</a></li>
@@ -77,21 +77,21 @@ However, since I strongly dislike to take for granted even this little details, 
 </code></pre><p>As you can see from the stack, we have the <a href="https://docs.microsoft.com/en-us/windows/win32/debug/structured-exception-handling">SEH</a> (structured exception handling) and on the top of it, there are two interesting functions (<a href="https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress">GetProcAddress</a> and <a href="https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya">LoadLibraryA</a>).</p>
 <p><strong>GetProcAddress</strong> retrieves the address of an exported function or variable from the specified dynamic-link library (DLL), instead the function <strong>LoadLibraryA</strong> loads the specified module into the address space of the calling process (note that this module may cause other modules to be loaded).</p>
 <p>Since we are trying to follow a repeatable approach, according to the information retrieved so far we could start guessing
-(and then proving or refusing) something about the application. As far as we know, the application starts to load some dll (e.g., kernel32.dll) and then from each of them retrieve all functions that are needed for the executable. Then when everything is correctly settled, the application should go back to the OEP (Origianl Entry Point).</p>
+(and then proving or refusing) something about the application. As far as we know, the application starts to load some dll (e.g., kernel32.dll) and then from each of them retrieve all functions that are needed for the executable. Then when everything is correctly settled, the application should go back to the OEP (Original Entry Point).</p>
 <p><strong>In order to follow this insight its important to understand where these function are called and place a breakpoint there.</strong></p>
-<h2 id="examinig-a-function-call">Examinig a function call</h2>
+<h2 id="examining-a-function-call">Examining a function call</h2>
 <p>From here, there are uncountable ways to move forward in order to find the OEP. We could look through the code to understand where GetProcAddress or LoadLibraryA are called for the last time, or we could also find the last function and the last library loaded and from that point move forward to reach the OEP, otherwise we could also look for specific blocks that are commonly used to save the OEP.</p>
-<p>However, showing a specific technique is out of scope (as I said, <strong>I would like to give some hints and a mindset to approach to these challenges</strong>),
+<p>However, showing a specific technique is out of scope (as I said, <strong>I would like to give some hints and a mindset to approach to these challenges</strong>), 
 I&rsquo;m going to explore a little bit more the binary in order to be able to retrieve the OEP, dump the binary and restoring also the IAT (Import Address Table).</p>
 <p>After these clarifications we are now ready to proceed with our analysis.</p>
-<p>Since we were able to indentify GetProcAddress and LoadLibraryA functions on the stack, we could easly move forward until we don&rsquo;t see
-that these function are acutally called within the UnPackMe address space. In my case, these functions are called from the UnPackMe address space at the following addresses:</p>
+<p>Since we were able to identify GetProcAddress and LoadLibraryA functions on the stack, we could easily move forward until we don&rsquo;t see 
+that these function are actually called within the UnPackMe address space. In my case, these functions are called from the UnPackMe address space at the following addresses:</p>
 <ul>
 <li>LoadLibraryA   0049A053</li>
 <li>GetProcAddress 0049A06A</li>
 </ul>
-<p>Now let&rsquo;s go deep a little bit in detial, examining the LoadLibraryA fucntion call and its returning value (the approach is the same for GetProcAddress ).</p>
-<p>If you followed the <a href="https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya">link</a> related to this function you are now aware that LoadLibrabryA take a single parameter that represents the module name. Accoding to the <a href="https://en.wikibooks.org/wiki/X86_Disassembly/Calling_Conventions">calling convention</a> in x86 this parameters are commonly pushed on the stack, instead the return value is stored in the EAX registry.</p>
+<p>Now let&rsquo;s go deep a little bit in detail, examining the LoadLibraryA function call and its returning value (the approach is the same for GetProcAddress ).</p>
+<p>If you followed the <a href="https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya">link</a> related to this function you are now aware that LoadLibrabryA take a single parameter that represents the module name. According to the <a href="https://en.wikibooks.org/wiki/X86_Disassembly/Calling_Conventions">calling convention</a> in x86 this parameters are commonly pushed on the stack, instead the return value is stored in the EAX registry.</p>
 <p><img src="/img/winupack/loadLibrary.png" alt="LoadLibraryA details"></p>
 <p>From the figure above It is easy to spot that:</p>
 <ul>
@@ -100,7 +100,7 @@ that these function are acutally called within the UnPackMe address space. In my
 </ul>
 <p>In order to check if EAX contains the module&rsquo;s handler, we do a single step forward after the call ECX instruction. After that instruction we are able to see that EAX contains the handler for the module USER32.</p>
 <pre><code>EAX 74EA0000 OFFSET USER32.#2338
-</code></pre><p>Evetually, when the last call to the LoadLibraryA and GetProcAddress are performed the EIP will reach the address <code>0049A06F</code> that contains the <code>RETN</code> instruction that will lead us the actual OEP.</p>
+</code></pre><p>Eventually, when the last call to the LoadLibraryA and GetProcAddress are performed the EIP will reach the address <code>0049A06F</code> that contains the <code>RETN</code> instruction that will lead us the actual OEP.</p>
 <p><img src="/img/winupack/OEP.png#center" alt="OEP"></p>
 <p>Since we were able to go back to the OEP, <strong>we are also confirming that our initial hypothesis was correct</strong>! (Yes I cheated a little bit, since I already knew that it was the right path :) .</p>
 <p>From now on, its just a matter of:</p>
@@ -112,9 +112,9 @@ that these function are acutally called within the UnPackMe address space. In my
 </ol>
 <p>These steps are left as homework for the few people that reached this point :)</p>
 <h2 id="conclusion">Conclusion</h2>
-<p>To conclude, in this brief post we saw how to manually examine a binary that has been packed, looking for clues, formulate hypothesis and then working to confirm or rejet them.</p>
-<p>In my experience, reversing isn&rsquo;t going in the middle of the code without an idea, its important to follow a method that should be as general as possible like the <code>scientific method</code>. In order to get better, I strongly recommed to practice with other sample trying to apply the same approach we saw here.</p>
-<p>In case of doubts or unclear part or just feedback about this post, feel free to reach me on my mail account.</p>
+<p>To conclude, in this brief post we saw how to manually examine a binary that has been packed, looking for clues, formulate hypothesis and then working to confirm or reject them.</p>
+<p>In my experience, reversing isn&rsquo;t going in the middle of the code without an idea, it’s important to follow a method that should be as general as possible like the <code>scientific method</code>. In order to get better, I strongly recommend to practice with other sample trying to apply the same approach we saw here.</p>
+<p>In case of doubts, unclear part, or just feedback about this post, feel free to reach me on my mail account.</p>
 ]]></content>
         </item>
         
